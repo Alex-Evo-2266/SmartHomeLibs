@@ -1,3 +1,4 @@
+# universal_queue.py
 from typing import List, Dict, Type, Callable, Awaitable, Optional, Any
 import asyncio, logging
 from contextlib import suppress
@@ -32,7 +33,7 @@ class UniversalQueue:
     ):
         self.schemas[type_name] = schema
         self.handlers[type_name] = handler
-        self.logger.info(f"[Queue] Registered queue type: {type_name}")
+        self.logger.info(f"[Queue] Registered queue type '{type_name}' with model {schema.__name__}")
 
     def add(self, type_name: str, **kwargs) -> None:
         try:
@@ -56,6 +57,7 @@ class UniversalQueue:
 
         success = True
         processed_items = 0
+        restart: List[QueueItem] = []
 
         try:
             for idx, item in enumerate(list(self.queue)):
@@ -73,6 +75,9 @@ class UniversalQueue:
                 except Exception as e:
                     self.logger.error(f"[Queue] Error processing item {idx + 1}: {e}", exc_info=True)
                     success = False
+                    if(item.try_start > 1):
+                        item.try_start -= 1
+                        restart.append(item)
                     continue
             return success
         finally:
@@ -81,6 +86,6 @@ class UniversalQueue:
                     self.queue.clear()
                     self.logger.info("[Queue] Cleared successfully.")
                 else:
-                    self.queue = self.queue[processed_items:]
+                    self.queue = restart
                     self.logger.warning(f"[Queue] Partially processed. Remaining: {len(self.queue)}")
             self.logger.info(f"[Queue] Finished. Success: {success}")
