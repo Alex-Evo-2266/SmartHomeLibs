@@ -1,3 +1,5 @@
+from .producer import RabbitMQProducerFanout
+from .producer import RabbitMQProducer
 
 class BaseSender:
     def __init__(self, logger, data_provider=None):
@@ -36,12 +38,10 @@ class BaseSender:
 class QueueSender(BaseSender):
     """Отправка данных в конкретную очередь"""
     def create_publisher(self, queue_name, host):
-        from .producer import RabbitMQProducer
         return RabbitMQProducer(host=host, queue_name=queue_name)
 
 
 class FanoutSender(BaseSender):
     """Отправка данных в fanout exchange"""
     def create_publisher(self, exchange_name, host):
-        from .producer import RabbitMQProducerFanout
         return RabbitMQProducerFanout(host=host, exchange_name=exchange_name)
