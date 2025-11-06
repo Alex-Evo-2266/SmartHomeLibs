@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from enum import Enum
 from typing import Callable, Optional
 
@@ -9,13 +9,13 @@ class ConfigItemType(str, Enum):
 	MORE_TEXT = "more"
 
 class ConfigItem(BaseModel):
-	class Config:  
-		use_enum_values = True
 
 	key: str
 	value: str
 	type: ConfigItemType
 	tag: str = 'base'
+
+	model_config = ConfigDict(use_enum_values=True)
 
 def foo():
 	pass
