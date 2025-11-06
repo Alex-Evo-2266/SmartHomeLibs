@@ -81,7 +81,8 @@ class EventLoop:
                         to_remove.append(key)
 
             for key in to_remove:
-                self.unregister(key)
+                self.functions.pop(key, None)
+                # self.unregister(key)
             self.logger.info("end loop iter")
             await asyncio.sleep(1)
         
