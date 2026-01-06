@@ -30,9 +30,9 @@ async def test_register_and_add_success(caplog):
 
     queue.add("my_item", data="ok")
 
-    assert len(queue.queue) == 1
-    assert isinstance(queue.queue[0], MyItem)
-    assert queue.queue[0].data == "ok"
+    assert len(queue.pending) == 1
+    assert isinstance(queue.pending[0], MyItem)
+    assert queue.pending[0].data == "ok"
     assert "Registered queue type" in caplog.text
 
 

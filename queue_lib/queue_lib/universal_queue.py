@@ -4,33 +4,20 @@ import asyncio, logging
 from contextlib import suppress
 from .types import QueueItem
 
-
 class UniversalQueue:
-    def __init__(
-        self,
-        registrations: Optional[
-            Dict[
-                str,
-                tuple[Type[QueueItem], Callable[[QueueItem], Awaitable[None]]]
-            ]
-        ] = None,
-        logger:Any | None = None
-    ):
+    def __init__(self, registrations=None, logger: Any | None = None):
         self.queue: List[QueueItem] = []
+        self.pending: List[QueueItem] = []  # буфер для новых элементов
         self.handlers: Dict[str, Callable[[QueueItem], Awaitable[None]]] = {}
         self.schemas: Dict[str, Type[QueueItem]] = {}
         self.logger = logger or logging.getLogger(__name__)
+        self._lock = asyncio.Lock()  # защита от одновременного add + start
 
         if registrations:
             for type_name, (schema, handler) in registrations.items():
                 self.register(type_name, schema, handler)
 
-    def register(
-        self,
-        type_name: str,
-        schema: Type[QueueItem],
-        handler: Callable[[QueueItem], Awaitable[None]],
-    ):
+    def register(self, type_name: str, schema: Type[QueueItem], handler: Callable[[QueueItem], Awaitable[None]]):
         self.schemas[type_name] = schema
         self.handlers[type_name] = handler
         self.logger.info(f"[Queue] Registered queue type '{type_name}' with model {schema.__name__}")
@@ -42,24 +29,26 @@ class UniversalQueue:
             if not schema:
                 raise ValueError(f"Unknown queue type: {type_name}")
             item = schema(**kwargs)
-            self.queue.append(item)
-            self.logger.info(f"[Queue] Item added: {item}")
+            self.pending.append(item)  # добавляем в буфер
+            self.logger.info(f"[Queue] Item added to pending: {item}")
         except Exception as e:
             self.logger.error(f"[Queue] Failed to add item: {e}", exc_info=True)
             raise
 
     async def start(self) -> bool:
-        self.logger.info(f"[Queue] Starting. Items: {len(self.queue)}")
+        async with self._lock:
+            # переносим pending в queue
+            self.queue.extend(self.pending)
+            self.pending.clear()
 
-        if not self.queue:
-            self.logger.info("[Queue] Queue is empty.")
-            return True
+            self.logger.info(f"[Queue] Starting. Items: {len(self.queue)}")
+            if not self.queue:
+                self.logger.info("[Queue] Queue is empty.")
+                return True
 
-        success = True
-        processed_items = 0
-        restart: List[QueueItem] = []
+            success = True
+            restart: List[QueueItem] = []
 
-        try:
             for idx, item in enumerate(list(self.queue)):
                 try:
                     self.logger.debug(f"[Queue] Processing item {idx + 1}: {item}")
@@ -67,7 +56,6 @@ class UniversalQueue:
                     if not handler:
                         raise ValueError(f"No handler registered for type: {item.type}")
                     await handler(item)
-                    processed_items += 1
                 except asyncio.CancelledError:
                     self.logger.warning("[Queue] Processing cancelled.")
                     success = False
@@ -75,17 +63,17 @@ class UniversalQueue:
                 except Exception as e:
                     self.logger.error(f"[Queue] Error processing item {idx + 1}: {e}", exc_info=True)
                     success = False
-                    if(item.try_start > 1):
+                    if item.try_start > 1:
                         item.try_start -= 1
                         restart.append(item)
                     continue
+
+            # сохраняем необработанные элементы и добавляем новые из pending
+            self.queue = restart + self.pending
+            self.pending.clear()
+
+            if not self.queue:
+                self.logger.info("[Queue] Cleared successfully.")
+
+            self.logger.info(f"[Queue] Finished. Success: {success}. Remaining items: {len(self.queue)}")
             return success
-        finally:
-            with suppress(Exception):
-                if success:
-                    self.queue.clear()
-                    self.logger.info("[Queue] Cleared successfully.")
-                else:
-                    self.queue = restart
-                    self.logger.warning(f"[Queue] Partially processed. Remaining: {len(self.queue)}")
-            self.logger.info(f"[Queue] Finished. Success: {success}")
