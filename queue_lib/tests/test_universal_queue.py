@@ -91,6 +91,7 @@ async def test_start_with_handler_error(caplog):
     assert "Error processing item" in caplog.text
     # ошибканый элемент должен остаться для следующего запуска
     assert len(queue.queue) == 1
+    assert len(queue.pending) == 0
     assert queue.queue[0].data == "2"
     assert queue.queue[0].try_start == 1
 
@@ -159,3 +160,4 @@ async def test_retry_failed_item():
     # "fail" должен обработаться
     assert processed == ["ok", "fail"]
     assert len(queue.queue) == 0
+    assert len(queue.pending) == 0

@@ -41,6 +41,7 @@ class UniversalQueue:
             self.queue.extend(self.pending)
             self.pending.clear()
 
+            self.logger.debug(f"[Queue] Starting. Items: {self.queue} {self.pending}")
             self.logger.info(f"[Queue] Starting. Items: {len(self.queue)}")
             if not self.queue:
                 self.logger.info("[Queue] Queue is empty.")
@@ -69,8 +70,11 @@ class UniversalQueue:
                     continue
 
             # сохраняем необработанные элементы и добавляем новые из pending
+            self.logger.debug(f"[Queue] end iter: {self.queue} {self.pending} {restart}")
+
             self.queue = restart + self.pending
             self.pending.clear()
+            self.logger.debug(f"[Queue] end clear : {self.queue} {self.pending} {restart}")
 
             if not self.queue:
                 self.logger.info("[Queue] Cleared successfully.")
